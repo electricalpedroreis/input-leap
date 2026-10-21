@@ -37,7 +37,8 @@ Hassle-free reliability. We are users, too. Input Leap was created so that we co
 solve the issues we had with Synergy and then share these fixes with other
 users.
 
-Compatibility. We use more than one operating system and you probably do, too.
+#### Compatibility
+We use more than one operating system and you probably do, too.
 Windows, macOS, Linux, FreeBSD... Input Leap should "just work".
 
 Communication. Everything we do is in the open. Our issue tracker will let you
