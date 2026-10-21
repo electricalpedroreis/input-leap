@@ -66,8 +66,13 @@ if(INPUTLEAP_ADD_HEADERS)
 endif()
 
 add_executable(unittests ${sources})
-target_link_libraries(unittests
-    base client server common io net platform server synlib mt arch ipc ${GTEST_LIBRARIES} ${GMOCK_LIBRARIES} ${libs} OpenSSL::SSL OpenSSL::Crypto)
+if (MSVC)
+    target_link_libraries(unittests
+        base client server common io net platform server synlib mt arch ipc ${GTEST_LIBRARIES} ${GMOCK_LIBRARIES} ${libs} OpenSSL::SSL OpenSSL::Crypto)
+else()
+    target_link_libraries(unittests
+        -Wl,--start-group base client server common io net platform synlib mt arch ipc -Wl,--end-group ${GTEST_LIBRARIES} ${GMOCK_LIBRARIES} ${libs} OpenSSL::SSL OpenSSL::Crypto z)
+endif()
 
 add_test(NAME unittests
          COMMAND unittests

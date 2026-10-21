@@ -78,8 +78,13 @@ if (UNIX)
 endif()
 
 add_executable(integtests ${sources})
-target_link_libraries(integtests
-    arch base client common io ipc mt net platform server synlib ${GTEST_LIBRARIES} ${GMOCK_LIBRARIES} ${libs} OpenSSL::SSL OpenSSL::Crypto)
+if (MSVC)
+    target_link_libraries(integtests
+        arch base client common io ipc mt net platform server synlib ${GTEST_LIBRARIES} ${GMOCK_LIBRARIES} ${libs} OpenSSL::SSL OpenSSL::Crypto)
+else()
+    target_link_libraries(integtests
+        -Wl,--start-group arch base client common io ipc mt net platform server synlib -Wl,--end-group ${GTEST_LIBRARIES} ${GMOCK_LIBRARIES} ${libs} OpenSSL::SSL OpenSSL::Crypto z)
+endif()
 
 add_test(NAME integrationtests
          COMMAND integtests

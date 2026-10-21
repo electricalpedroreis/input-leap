@@ -17,14 +17,21 @@
 
 set(sources input-leapd.cpp)
 if (WIN32)
-    list(APPEND sources input-leapd.rc)
-    set_property(SOURCE input-leapd.rc PROPERTY COMPILE_FLAGS /nologo)
+    if (MSVC)
+        list(APPEND sources input-leapd.rc)
+        set_property(SOURCE input-leapd.rc PROPERTY COMPILE_FLAGS /nologo)
+    endif()
 endif()
 
 add_executable (input-leapd WIN32 ${sources})
 
-target_link_libraries (input-leapd
-    arch base common io ipc mt net platform synlib ${libs} ${OPENSSL_LIBS})
+if (MSVC)
+    target_link_libraries (input-leapd
+        arch base common io ipc mt net platform synlib ${libs} ${OPENSSL_LIBS})
+else()
+    target_link_libraries (input-leapd
+        -Wl,--start-group arch base client common io ipc mt net platform server synlib -Wl,--end-group ${libs} OpenSSL::SSL OpenSSL::Crypto z)
+endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     install(TARGETS input-leapd DESTINATION ${INPUTLEAP_BUNDLE_BINARY_DIR})

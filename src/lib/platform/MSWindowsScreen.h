@@ -188,9 +188,6 @@ private: // HACK
     // fix timer callback
     void handle_fixes();
 
-    // fix the clipboard viewer chain
-    void fixClipboardViewer();
-
     // enable/disable special key combinations so we can catch/pass them
     void enableSpecialKeys(bool) const;
 
@@ -290,10 +287,9 @@ private:
     bool m_screensaverNotify;
     bool m_screensaverActive;
 
-    // clipboard stuff.  our window is used mainly as a clipboard
-    // owner and as a link in the clipboard viewer chain.
+    // clipboard stuff.  our window is used as a clipboard owner and
+    // to receive clipboard format change notifications.
     HWND m_window;
-    HWND m_nextClipboardWindow;
     bool m_ownClipboard;
 
     // one desk per desktop and a cond var to communicate with it

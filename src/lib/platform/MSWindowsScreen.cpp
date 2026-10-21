@@ -45,6 +45,11 @@
 #include <comutil.h>
 #include <algorithm>
 
+// available on Vista and later; define it for older SDK headers
+#ifndef WM_CLIPBOARDUPDATE
+#define WM_CLIPBOARDUPDATE 0x031D
+#endif
+
 //
 // add backwards compatible multihead support (and suppress bogus warning).
 // this isn't supported on MinGW yet AFAICT.
@@ -109,7 +114,6 @@ MSWindowsScreen::MSWindowsScreen(
     m_screensaverNotify(false),
     m_screensaverActive(false),
     m_window(nullptr),
-    m_nextClipboardWindow(nullptr),
     m_ownClipboard(false),
     m_desks(nullptr),
     m_keyState(nullptr),
@@ -210,8 +214,12 @@ MSWindowsScreen::enable()
     m_events->add_handler(EventType::TIMER, m_fixTimer,
                           [this](const auto& e){ handle_fixes(); });
 
-    // install our clipboard snooper
-    m_nextClipboardWindow = SetClipboardViewer(m_window);
+    // listen for clipboard changes.  this is more reliable than the
+    // legacy clipboard viewer chain, which can be broken by other apps
+    // or lost when switching desktops/sessions.
+    if (!AddClipboardFormatListener(m_window)) {
+        LOG_WARN("failed to add clipboard format listener: %d", GetLastError());
+    }
 
     // track the active desk and (re)install the hooks
     m_desks->enable();
@@ -253,9 +261,8 @@ MSWindowsScreen::disable()
     // tell key state
     m_keyState->disable();
 
-    // stop snooping the clipboard
-    ChangeClipboardChain(m_window, m_nextClipboardWindow);
-    m_nextClipboardWindow = nullptr;
+    // stop listening for clipboard changes
+    RemoveClipboardFormatListener(m_window);
 
     // uninstall fix timer
     if (m_fixTimer != nullptr) {
@@ -407,13 +414,10 @@ MSWindowsScreen::checkClipboards()
     // grabbed the clipboard on this screen without us knowing.
     // tell the server that this screen grabbed the clipboard.
     //
-    // this works around bugs in the clipboard viewer chain.
-    // sometimes NT will simply never send WM_DRAWCLIPBOARD
-    // messages for no apparent reason and rebooting fixes the
-    // problem.  since we don't want a broken clipboard until the
-    // next reboot we do this double check.  clipboard ownership
-    // won't be reflected on other screens until we leave but at
-    // least the clipboard itself will work.
+    // this works around the (rare) case where a WM_CLIPBOARDUPDATE
+    // notification is missed.  clipboard ownership won't be reflected
+    // on other screens until we leave but at least the clipboard
+    // itself will work.
     if (m_ownClipboard && !MSWindowsClipboard::is_owned_by_us()) {
         LOG_DEBUG("clipboard changed: lost ownership and no notification received");
         m_ownClipboard = false;
@@ -1009,24 +1013,8 @@ MSWindowsScreen::onEvent(HWND, UINT msg,
                 WPARAM wParam, LPARAM lParam, LRESULT* result)
 {
     switch (msg) {
-    case WM_DRAWCLIPBOARD:
-        // first pass on the message
-        if (m_nextClipboardWindow != nullptr) {
-            SendMessage(m_nextClipboardWindow, msg, wParam, lParam);
-        }
-
-        // now handle the message
+    case WM_CLIPBOARDUPDATE:
         return onClipboardChange();
-
-    case WM_CHANGECBCHAIN:
-        if (m_nextClipboardWindow == (HWND)wParam) {
-            m_nextClipboardWindow = (HWND)lParam;
-            LOG_DEBUG("clipboard chain: new next: 0x%08x", m_nextClipboardWindow);
-        }
-        else if (m_nextClipboardWindow != nullptr) {
-            SendMessage(m_nextClipboardWindow, msg, wParam, lParam);
-        }
-        return true;
 
     case WM_DISPLAYCHANGE:
         return onDisplayChange();
@@ -1447,15 +1435,15 @@ MSWindowsScreen::onDisplayChange()
 bool
 MSWindowsScreen::onClipboardChange()
 {
-    // now notify client that somebody changed the clipboard (unless
-    // we're the owner).
+    // notify the client when somebody else changed the clipboard.  we
+    // must do this even if we didn't previously own the clipboard,
+    // otherwise the first copy made on this screen after connecting
+    // would be silently ignored.
     if (!MSWindowsClipboard::is_owned_by_us()) {
-        if (m_ownClipboard) {
-            LOG_DEBUG("clipboard changed: lost ownership");
-            m_ownClipboard = false;
-            sendClipboardEvent(EventType::CLIPBOARD_GRABBED, kClipboardClipboard);
-            sendClipboardEvent(EventType::CLIPBOARD_GRABBED, kClipboardSelection);
-        }
+        LOG_DEBUG("clipboard changed: lost ownership");
+        m_ownClipboard = false;
+        sendClipboardEvent(EventType::CLIPBOARD_GRABBED, kClipboardClipboard);
+        sendClipboardEvent(EventType::CLIPBOARD_GRABBED, kClipboardSelection);
     }
     else if (!m_ownClipboard) {
         LOG_DEBUG("clipboard changed: got ownership");
@@ -1556,30 +1544,10 @@ MSWindowsScreen::updateScreenShape()
 
 void MSWindowsScreen::handle_fixes()
 {
-    // fix clipboard chain
-    fixClipboardViewer();
-
     // update keys if keyboard layouts have changed
     if (m_keyState->didGroupsChange()) {
         updateKeys();
     }
-}
-
-void
-MSWindowsScreen::fixClipboardViewer()
-{
-    // XXX -- disable this code for now.  somehow it can cause an infinite
-    // recursion in the WM_DRAWCLIPBOARD handler.  either we're sending
-    // the message to our own window or some window farther down the chain
-    // forwards the message to our window or a window farther up the chain.
-    // i'm not sure how that could happen.  the m_nextClipboardWindow = nullptr
-    // was not in the code that infinite loops and may fix the bug but i
-    // doubt it.
-/*
-    ChangeClipboardChain(m_window, m_nextClipboardWindow);
-    m_nextClipboardWindow = nullptr;
-    m_nextClipboardWindow = SetClipboardViewer(m_window);
-*/
 }
 
 void

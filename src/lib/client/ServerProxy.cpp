@@ -466,6 +466,16 @@ ServerProxy::translateKey(KeyID id) const
         break;
     }
 
+#ifdef SYSAPI_WIN32
+    // on Windows there is no dedicated AltGr modifier; AltGr is
+    // synthesized as Ctrl+Alt.  map a standalone AltGr key to the
+    // right control key so the client can press it together with
+    // the Alt modifier carried in the mask.
+    if (id == kKeyAltGr) {
+        return kKeyControl_R;
+    }
+#endif
+
     if (id2 != kKeyModifierIDNull) {
         return s_translationTable[m_modifierTranslationTable[id2]][side];
     }
@@ -503,7 +513,13 @@ ServerProxy::translateModifierMask(KeyModifierMask mask) const
         newMask |= s_masks[m_modifierTranslationTable[kKeyModifierIDAlt]];
     }
     if ((mask & KeyModifierAltGr) != 0) {
+#ifdef SYSAPI_WIN32
+        // on Windows AltGr is synthesized as Ctrl+Alt, so translate
+        // the AltGr modifier to both of those modifier bits.
+        newMask |= KeyModifierControl | KeyModifierAlt;
+#else
         newMask |= s_masks[m_modifierTranslationTable[kKeyModifierIDAltGr]];
+#endif
     }
     if ((mask & KeyModifierMeta) != 0) {
         newMask |= s_masks[m_modifierTranslationTable[kKeyModifierIDMeta]];

@@ -173,7 +173,7 @@ endif()
 # The following file includes X11 headers that later break Qt headers.
 set_source_files_properties("src/DisplayIsValid.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
 
-if (WIN32)
+if (WIN32 AND MSVC)
     set (GUI_RC_FILES res/win/InputLeap.rc)
     set_property(SOURCE res/win/InputLeap.rc PROPERTY COMPILE_FLAGS /nologo)
 endif()
@@ -190,17 +190,29 @@ add_executable (input-leap WIN32
 
 include_directories (./src)
 
-target_link_libraries(input-leap
-    net
-    arch
-    base
-    io
-    Qt${QT_DEFAULT_MAJOR_VERSION}::Core
-    Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets
-    Qt${QT_DEFAULT_MAJOR_VERSION}::Network
-)
+if (MSVC)
+    target_link_libraries(input-leap
+        net
+        arch
+        base
+        io
+        Qt${QT_DEFAULT_MAJOR_VERSION}::Core
+        Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets
+        Qt${QT_DEFAULT_MAJOR_VERSION}::Network
+    )
+else()
+    target_link_libraries(input-leap
+        -Wl,--start-group net arch base io common -Wl,--end-group
+        Qt${QT_DEFAULT_MAJOR_VERSION}::Core
+        Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets
+        Qt${QT_DEFAULT_MAJOR_VERSION}::Network
+    )
+endif()
 
 target_link_libraries(input-leap OpenSSL::SSL OpenSSL::Crypto)
+if (NOT MSVC)
+    target_link_libraries(input-leap z)
+endif()
 
 target_compile_definitions (input-leap PRIVATE -DINPUTLEAP_VERSION_STAGE="${INPUTLEAP_VERSION_STAGE}")
 target_compile_definitions (input-leap PRIVATE -DINPUTLEAP_REVISION="${INPUTLEAP_REVISION}")
@@ -210,7 +222,9 @@ if (BUILD_MSWINDOWS)
     find_library (DNSSD_LIB dnssd.lib
                   HINTS ENV BONJOUR_SDK_HOME
                   PATH_SUFFIXES "Lib/x64")
-    set_target_properties (input-leap PROPERTIES LINK_FLAGS "/NODEFAULTLIB:LIBCMT")
+    if (MSVC)
+        set_target_properties (input-leap PROPERTIES LINK_FLAGS "/NODEFAULTLIB:LIBCMT")
+    endif()
     target_link_libraries (input-leap ${DNSSD_LIB})
 endif()
 if (BUILD_CARBON)
@@ -221,7 +235,9 @@ if (BUILD_XWINDOWS OR BUILD_LIBEI)
     target_link_libraries (input-leap dns_sd Threads::Threads)
 endif()
 
-target_link_libraries (input-leap common)
+if (MSVC)
+    target_link_libraries (input-leap common)
+endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     install(TARGETS input-leap DESTINATION ${INPUTLEAP_BUNDLE_BINARY_DIR})
